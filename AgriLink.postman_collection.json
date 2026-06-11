@@ -1,0 +1,566 @@
+{
+  "info": {
+    "name": "AgriLink Backend API",
+    "description": "Complete API collection for the AgriLink hackathon backend. Base URL and auth token are set as collection variables — update {{base_url}} and {{token}} after logging in.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:5000/api/v1", "type": "string" },
+    { "key": "token",    "value": "", "type": "string",
+      "description": "Paste the JWT token here after calling any /auth/login endpoint" },
+    { "key": "user_id",  "value": "", "type": "string",
+      "description": "MongoDB ObjectId of a user — used in admin approve/suspend" },
+    { "key": "match_id", "value": "", "type": "string",
+      "description": "MongoDB ObjectId of a Match — used in buyer confirm/decline" },
+    { "key": "log_id",   "value": "", "type": "string",
+      "description": "MongoDB ObjectId of a Log — used in admin simulate-spoilage" }
+  ],
+  "item": [
+
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "http://localhost:5000/health", "host": ["localhost"], "port": "5000", "path": ["health"] },
+            "description": "Returns {status: 'ok'}. No auth required. Use this to confirm the server is running."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login — Admin",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+2340000000001\",\n  \"password\": \"admin123\"\n}"
+            },
+            "description": "Seeded admin account. Copy the returned token into the {{token}} collection variable."
+          }
+        },
+        {
+          "name": "Login — Aggregator",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+2340000000002\",\n  \"password\": \"agg123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login — Factory (Buyer)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+2340000000003\",\n  \"password\": \"factory123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login — Restaurant (Buyer)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+2340000000004\",\n  \"password\": \"rest123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login — Dealer",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+2340000000005\",\n  \"password\": \"dealer123\"\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Aggregator",
+      "item": [
+        {
+          "name": "Register Aggregator",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/aggregator/register", "host": ["{{base_url}}"], "path": ["aggregator", "register"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+2348011111111\",\n  \"fullName\": \"Emeka Aggregator\",\n  \"password\": \"password123\",\n  \"zone\": \"Ibadan South\",\n  \"governmentIdType\": \"nin\",\n  \"governmentIdNumber\": \"98765432101\",\n  \"governmentIdPhotoUrl\": \"https://res.cloudinary.com/demo/image/upload/sample.jpg\",\n  \"guarantorPhone\": \"+2348099999999\"\n}"
+            },
+            "description": "Public endpoint — no token needed. Account starts as PENDING; admin must approve before the aggregator can log in."
+          }
+        },
+        {
+          "name": "Get Aggregator Profile",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/aggregator/profile", "host": ["{{base_url}}"], "path": ["aggregator", "profile"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "description": "Requires aggregator JWT token."
+          }
+        },
+        {
+          "name": "Submit Log — Agri-Waste (Cassava Peel)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/aggregator/logs", "host": ["{{base_url}}"], "path": ["aggregator", "logs"] },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"farmerPhone\": \"+2348022222222\",\n  \"pipeline\": \"agri_waste\",\n  \"category\": \"cassava_peel\",\n  \"weightKg\": 120,\n  \"condition\": \"dry\",\n  \"latitude\": 7.3826,\n  \"longitude\": 3.9470,\n  \"photoUrl\": \"https://res.cloudinary.com/demo/image/upload/sample.jpg\",\n  \"harvestedAt\": \"2026-06-11T00:00:00.000Z\"\n}"
+            },
+            "description": "The matching engine runs immediately after this call (fire-and-forget). If the seeded Dangote factory StandingOrder is active, a Match will be created within seconds. Check GET /aggregator/logs to see the status change."
+          }
+        },
+        {
+          "name": "Submit Log — Fresh Produce (Tomatoes)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/aggregator/logs", "host": ["{{base_url}}"], "path": ["aggregator", "logs"] },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"farmerPhone\": \"+2348022222222\",\n  \"pipeline\": \"fresh_produce\",\n  \"category\": \"tomatoes\",\n  \"weightKg\": 50,\n  \"condition\": \"fresh\",\n  \"latitude\": 7.3950,\n  \"longitude\": 3.9100,\n  \"photoUrl\": \"https://res.cloudinary.com/demo/image/upload/sample.jpg\",\n  \"harvestedAt\": \"2026-06-11T00:00:00.000Z\"\n}"
+            },
+            "description": "farmerPhone auto-creates a Farmer if they don't exist. The spoilageDeadline is computed as harvestedAt + 48h for tomatoes."
+          }
+        },
+        {
+          "name": "Get All Logs",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/aggregator/logs?page=1&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["aggregator", "logs"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "pipeline", "value": "agri_waste", "disabled": true },
+                { "key": "status", "value": "pending_match", "disabled": true }
+              ]
+            },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "description": "Filter by pipeline (fresh_produce | agri_waste) and status (pending_match | matched | confirmed | no_match | expired | declined). Remove the # from query params to enable filters."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Buyer",
+      "item": [
+        {
+          "name": "Register Buyer — Factory",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/buyer/register", "host": ["{{base_url}}"], "path": ["buyer", "register"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+2348033333333\",\n  \"fullName\": \"Flour Mills Nigeria\",\n  \"password\": \"password123\",\n  \"buyerType\": \"factory\",\n  \"companyName\": \"Flour Mills Nigeria PLC\",\n  \"address\": \"1 Golden Penny Drive, Apapa, Lagos\",\n  \"latitude\": 6.4418,\n  \"longitude\": 3.3760,\n  \"contactName\": \"Chukwuemeka Obi\",\n  \"contactPhone\": \"+2348033333333\"\n}"
+            },
+            "description": "buyerType must be 'factory' or 'restaurant'. Account starts as PENDING — admin must approve."
+          }
+        },
+        {
+          "name": "Register Buyer — Restaurant",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/buyer/register", "host": ["{{base_url}}"], "path": ["buyer", "register"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+2348044444444\",\n  \"fullName\": \"Mr Biggs Manager\",\n  \"password\": \"password123\",\n  \"buyerType\": \"restaurant\",\n  \"companyName\": \"Mr Biggs Ibadan\",\n  \"address\": \"45 Bodija Market Road, Ibadan\",\n  \"latitude\": 7.4031,\n  \"longitude\": 3.9020,\n  \"logisticsMode\": \"mode_b\",\n  \"contactName\": \"Fatima Abubakar\",\n  \"contactPhone\": \"+2348044444444\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Buyer Profile",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/buyer/profile", "host": ["{{base_url}}"], "path": ["buyer", "profile"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Create Standing Order — Agri-Waste (Anchor)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/buyer/orders", "host": ["{{base_url}}"], "path": ["buyer", "orders"] },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pipeline\": \"agri_waste\",\n  \"category\": \"cassava_peel\",\n  \"minQuantityKg\": 50,\n  \"maxQuantityKg\": 500,\n  \"pricePerKg\": 30,\n  \"isAnchor\": true\n}"
+            },
+            "description": "isAnchor: true means this buyer gets priority matching — the scoring algorithm is bypassed entirely and they get score 100. Use for demo day to guarantee a match fires instantly."
+          }
+        },
+        {
+          "name": "Create Standing Order — Fresh Produce (Regular)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/buyer/orders", "host": ["{{base_url}}"], "path": ["buyer", "orders"] },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pipeline\": \"fresh_produce\",\n  \"category\": \"tomatoes\",\n  \"minQuantityKg\": 20,\n  \"pricePerKg\": 800,\n  \"isAnchor\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "Get All Standing Orders",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/buyer/orders", "host": ["{{base_url}}"], "path": ["buyer", "orders"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Get All Matches",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/buyer/matches?page=1&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["buyer", "matches"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "status", "value": "pending", "disabled": true }
+              ]
+            },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "description": "Returns all matches for this buyer. Filter by status: pending | confirmed | declined | disputed."
+          }
+        },
+        {
+          "name": "Get Single Match",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/buyer/matches/{{match_id}}", "host": ["{{base_url}}"], "path": ["buyer", "matches", "{{match_id}}"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "description": "Replace {{match_id}} with the MongoDB ObjectId of the match."
+          }
+        },
+        {
+          "name": "Confirm Match (triggers wallet payout)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/buyer/matches/{{match_id}}/confirm", "host": ["{{base_url}}"], "path": ["buyer", "matches", "{{match_id}}", "confirm"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "" },
+            "description": "No request body needed. This is the payment trigger:\n- Waste pipeline: 70% → farmer Agri-Wallet, 30% → Cash Wallet\n- Fresh produce: 100% → farmer Cash Wallet\nResponse includes the full payoutBreakdown."
+          }
+        },
+        {
+          "name": "Decline Match (re-queues log)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/buyer/matches/{{match_id}}/decline", "host": ["{{base_url}}"], "path": ["buyer", "matches", "{{match_id}}", "decline"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "" },
+            "description": "No request body needed. The log's status goes back to pending_match and the matching engine re-runs."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Dealer",
+      "item": [
+        {
+          "name": "Register Dealer",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/dealer/register", "host": ["{{base_url}}"], "path": ["dealer", "register"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+2348055555555\",\n  \"fullName\": \"Seun Agro Supplies\",\n  \"password\": \"password123\",\n  \"shopName\": \"Seun Agro Hub\",\n  \"dealerCode\": \"DEALER999\",\n  \"zone\": \"Ibadan North\"\n}"
+            },
+            "description": "dealerCode is what the farmer types in SMS: 'REDEEM 4200 DEALER999'. Must be unique and alphanumeric. Account starts as PENDING."
+          }
+        },
+        {
+          "name": "Get Dealer Profile",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/dealer/profile", "host": ["{{base_url}}"], "path": ["dealer", "profile"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Redeem OTP (verify + confirm in one step)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/dealer/redeem", "host": ["{{base_url}}"], "path": ["dealer", "redeem"] },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"834291\",\n  \"farmerPhone\": \"+2348022222222\"\n}"
+            },
+            "description": "Flow:\n1. Farmer SMSes 'REDEEM 4200 DEALER007' → receives OTP via SMS\n2. Farmer reads OTP aloud to dealer\n3. Dealer enters OTP on their dashboard → this endpoint\n4. If valid: farmer Agri-Wallet debited, OTP marked used, farmer gets confirmation SMS\n\nReplace code with the actual 6-digit OTP received."
+          }
+        },
+        {
+          "name": "Get Redemption History",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/dealer/redemptions?page=1&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["dealer", "redemptions"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "description": "Returns all used OTPs processed by this dealer (completed redemptions)."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Get Pending Users",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/admin/users/pending", "host": ["{{base_url}}"], "path": ["admin", "users", "pending"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "description": "Returns all users with status=pending — aggregators, buyers, and dealers awaiting approval."
+          }
+        },
+        {
+          "name": "Approve User",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/admin/users/{{user_id}}/approve", "host": ["{{base_url}}"], "path": ["admin", "users", "{{user_id}}", "approve"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "" },
+            "description": "Sets user.status = 'active'. Replace {{user_id}} with the MongoDB _id from the pending users list."
+          }
+        },
+        {
+          "name": "Suspend User",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/admin/users/{{user_id}}/suspend", "host": ["{{base_url}}"], "path": ["admin", "users", "{{user_id}}", "suspend"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "" }
+          }
+        },
+        {
+          "name": "Get All Matches",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/admin/matches?page=1&limit=30",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "matches"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "30" },
+                { "key": "status", "value": "pending", "disabled": true },
+                { "key": "pipeline", "value": "agri_waste", "disabled": true }
+              ]
+            },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Get All Logs",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/admin/logs?page=1&limit=30",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "logs"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "30" },
+                { "key": "status", "value": "pending_match", "disabled": true },
+                { "key": "pipeline", "value": "fresh_produce", "disabled": true }
+              ]
+            },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Flag Dispute",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/admin/matches/{{match_id}}/flag-dispute", "host": ["{{base_url}}"], "path": ["admin", "matches", "{{match_id}}", "flag-dispute"] },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Buyer reports produce was underweight on delivery\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Resolve Dispute",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/admin/matches/{{match_id}}/resolve-dispute", "host": ["{{base_url}}"], "path": ["admin", "matches", "{{match_id}}", "resolve-dispute"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "" }
+          }
+        },
+        {
+          "name": "Trigger Matching Manually",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/admin/matching/run", "host": ["{{base_url}}"], "path": ["admin", "matching", "run"] },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"logId\": \"{{log_id}}\"\n}"
+            },
+            "description": "Manually re-runs the matching engine for a specific log. Useful for demo day if a log is stuck in pending_match."
+          }
+        },
+        {
+          "name": "[DEMO] Send Forecast Advisory SMS",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/admin/demo/forecast-alert", "host": ["{{base_url}}"], "path": ["admin", "demo", "forecast-alert"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "" },
+            "description": "Sends the hardcoded 'Tomato demand up 40%' advisory SMS to DEMO_FARMER_PHONE in your .env. Use this during the pitch to show the demand forecasting feature."
+          }
+        },
+        {
+          "name": "[DEMO] Simulate Spoilage",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/admin/demo/simulate-spoilage/{{log_id}}", "host": ["{{base_url}}"], "path": ["admin", "demo", "simulate-spoilage", "{{log_id}}"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "" },
+            "description": "Forces a log into EXPIRED state and sends a spoilage clearance SMS to DEMO_FOODBANK_PHONE. Use during pitch to demo the spoilage-to-clearance flow."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Webhooks (Termii Inbound SMS)",
+      "item": [
+        {
+          "name": "Inbound SMS — BAL command",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/webhooks/sms/inbound", "host": ["{{base_url}}"], "path": ["webhooks", "sms", "inbound"] },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-termii-webhook-secret", "value": "your_termii_webhook_secret_here" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from\": \"+2348022222222\",\n  \"text\": \"BAL\"\n}"
+            },
+            "description": "Simulates Termii calling your webhook when a farmer texts 'BAL'. Replace the secret header value with your TERMII_WEBHOOK_SECRET from .env. The farmer receives their wallet balance via SMS."
+          }
+        },
+        {
+          "name": "Inbound SMS — REDEEM command",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/webhooks/sms/inbound", "host": ["{{base_url}}"], "path": ["webhooks", "sms", "inbound"] },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-termii-webhook-secret", "value": "your_termii_webhook_secret_here" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from\": \"+2348022222222\",\n  \"text\": \"REDEEM 4200 DEALER007\"\n}"
+            },
+            "description": "Simulates farmer texting 'REDEEM 4200 DEALER007'. Generates a 6-digit OTP, sends it via SMS to the farmer, valid 10 minutes."
+          }
+        },
+        {
+          "name": "Inbound SMS — WITHDRAW command",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/webhooks/sms/inbound", "host": ["{{base_url}}"], "path": ["webhooks", "sms", "inbound"] },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-termii-webhook-secret", "value": "your_termii_webhook_secret_here" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from\": \"+2348022222222\",\n  \"text\": \"WITHDRAW 2000\"\n}"
+            },
+            "description": "Simulates farmer texting 'WITHDRAW 2000'. Debits Cash Wallet and sends confirmation SMS. Admin processes payout manually for the hackathon."
+          }
+        },
+        {
+          "name": "Inbound SMS — Unknown command",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{base_url}}/webhooks/sms/inbound", "host": ["{{base_url}}"], "path": ["webhooks", "sms", "inbound"] },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-termii-webhook-secret", "value": "your_termii_webhook_secret_here" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from\": \"+2348022222222\",\n  \"text\": \"HELP\"\n}"
+            },
+            "description": "Returns a usage guide SMS: 'Available: BAL | REDEEM [amount] [dealerCode] | WITHDRAW [amount]'"
+          }
+        }
+      ]
+    }
+
+  ]
+}
