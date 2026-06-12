@@ -15,6 +15,9 @@ import { AppError } from './utils/AppError';
 
 const app = express();
 
+app.set('trust proxy', 1)
+
+
 // ─── Security ─────────────────────────────────────────────────────────────────
 app.use(helmet());
 app.use(cors({ origin: process.env.ALLOWED_ORIGIN ?? '*' }));
