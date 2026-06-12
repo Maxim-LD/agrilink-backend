@@ -3,7 +3,7 @@ import { authenticate, authorize } from '../middleware/auth.middleware';
 import { UserRole } from '../types';
 import {
   getPendingUsers, approveUser, suspendUser,
-  getAllMatches, getAllLogs,
+  getAllMatches, getAllLogs, getSystemLogs,
   flagDispute, resolveDispute,
   triggerMatching,
   sendForecastAlert, simulateSpoilage,
@@ -22,6 +22,7 @@ router.post('/users/:id/suspend',      suspendUser);
 // Data views
 router.get('/matches',                 getAllMatches);
 router.get('/logs',                    getAllLogs);
+router.get('/system-logs',             getSystemLogs);
 
 // Dispute management
 router.post('/matches/:id/flag-dispute',    flagDispute);

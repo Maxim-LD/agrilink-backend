@@ -4,6 +4,7 @@ import { Match } from '../models/Match';
 import { Log } from '../models/Log';
 import { AppError } from '../utils/AppError';
 import { ok } from '../utils/response';
+import { SystemLog } from '../models/SystemLog';
 import { matchLog } from '../services/matchingEngine.service';
 import { sendSMS } from '../services/sms.service';
 import { UserStatus, LogStatus } from '../types';
@@ -178,3 +179,38 @@ export const simulateSpoilage = async (req: Request, res: Response, next: NextFu
     ok(res, { message: 'Spoilage simulated', log });
   } catch (err) { next(err); }
 };
+
+// ─── System Logs Endpoint ──────────────────────────────────────────────────
+
+export const getSystemLogs = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { level, search, page = 1, limit = 50 } = req.query;
+    const filter: Record<string, any> = {};
+
+    if (level) {
+      filter.level = level;
+    }
+
+    if (search) {
+      filter.message = { $regex: search, $options: 'i' };
+    }
+
+    const logs = await SystemLog.find(filter)
+      .sort({ timestamp: -1 })
+      .skip((Number(page) - 1) * Number(limit))
+      .limit(Number(limit));
+
+    const total = await SystemLog.countDocuments(filter);
+
+    ok(res, {
+      logs,
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+        total,
+        pages: Math.ceil(total / Number(limit)),
+      },
+    });
+  } catch (err) { next(err); }
+};
+

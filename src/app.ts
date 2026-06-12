@@ -12,6 +12,8 @@ import adminRoutes      from './routes/admin.routes';
 import webhookRoutes    from './routes/webhook.routes';
 
 import { AppError } from './utils/AppError';
+import { requestLogger } from './middleware/requestLogger';
+import { logger } from './utils/logger';
 
 const app = express();
 
@@ -21,6 +23,9 @@ app.set('trust proxy', 1)
 // ─── Security ─────────────────────────────────────────────────────────────────
 app.use(helmet());
 app.use(cors({ origin: process.env.ALLOWED_ORIGIN ?? '*' }));
+
+// Request logging middleware
+app.use(requestLogger);
 
 // ─── Body parsing ─────────────────────────────────────────────────────────────
 app.use(express.json());
@@ -59,11 +64,12 @@ app.use((req: Request, res: Response) => {
 });
 
 // ─── Global error handler ─────────────────────────────────────────────────────
-app.use((err: Error | AppError, _req: Request, res: Response, _next: NextFunction) => {
+app.use((err: Error | AppError, req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof AppError) {
+    logger.warn(`AppError: ${err.message}`, { code: err.code, status: err.statusCode, url: req.originalUrl });
     return res.status(err.statusCode).json({ status: 'error', code: err.code, message: err.message });
   }
-  console.error('[Unhandled Error]', err);
+  logger.error('[Unhandled Error]', err);
   return res.status(500).json({ status: 'error', code: 'INTERNAL_ERROR', message: 'Something went wrong' });
 });
 
