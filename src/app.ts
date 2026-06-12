@@ -24,6 +24,7 @@ app.use(cors({ origin: process.env.ALLOWED_ORIGIN ?? '*' }));
 
 // ─── Body parsing ─────────────────────────────────────────────────────────────
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // ─── Rate limiting ────────────────────────────────────────────────────────────
 const globalLimiter = rateLimit({

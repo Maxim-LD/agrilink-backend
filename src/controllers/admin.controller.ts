@@ -27,7 +27,7 @@ export const approveUser = async (req: Request, res: Response, next: NextFunctio
       .findByIdAndUpdate(
         req.params.id,
         { status: UserStatus.ACTIVE },
-        { new: true }
+        { returnDocument: 'after' }
       );
 
     if (!user) return next(new AppError('User not found', 404, 'NOT_FOUND'));
@@ -43,7 +43,7 @@ export const suspendUser = async (req: Request, res: Response, next: NextFunctio
     .findByIdAndUpdate(
       req.params.id, 
       { status: UserStatus.SUSPENDED }, 
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!user) return next(new AppError('User not found', 404, 'NOT_FOUND'));
@@ -100,7 +100,7 @@ export const flagDispute = async (req: Request, res: Response, next: NextFunctio
       req.params.id, { 
         isDisputed: true, 
         disputeReason: reason }, 
-        { new: true }
+        { returnDocument: 'after' }
       );
 
     if (!match) return next(new AppError('Match not found', 404, 'NOT_FOUND'));
@@ -117,7 +117,7 @@ export const resolveDispute = async (req: Request, res: Response, next: NextFunc
           isDisputed: false, 
           disputeReason: undefined 
         }, 
-        { new: true }
+        { returnDocument: 'after' }
       );
     
     if (!match) return next(new AppError('Match not found', 404, 'NOT_FOUND'));
@@ -165,7 +165,7 @@ export const simulateSpoilage = async (req: Request, res: Response, next: NextFu
           isExpired: true, 
           status: LogStatus.EXPIRED 
         }, 
-        { new: true }
+        { returnDocument: 'after' }
       );
 
     if (!log) return next(new AppError('Log not found', 404, 'NOT_FOUND'));

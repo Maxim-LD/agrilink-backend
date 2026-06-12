@@ -78,7 +78,7 @@ export const splitPayout = async (match: IMatch): Promise<void> => {
           // $slice: -50 keeps only the most recent 50 transactions (circular buffer)
           $push: { transactions: { $each: [agriTxn, cashTxn], $slice: -50 } },
         },
-        { session, new: true },
+        { session, returnDocument: 'after' },
       );
 
       // This should never happen — but if it does, the transaction rolls back
@@ -116,7 +116,7 @@ export const creditCash = async (match: IMatch): Promise<void> => {
           $inc:  { cashWalletBalance: match.farmerNetPayout },
           $push: { transactions: { $each: [txn], $slice: -50 } },
         },
-        { session, new: true },
+        { session, returnDocument: 'after' },
       );
       if (!updated) throw new AppError('Farmer not found during payout', 500, 'PAYOUT_ERROR');
     });
@@ -172,7 +172,7 @@ export const redeemAgriWallet = async (
           $inc:  { agriWalletBalance: -amountNaira },
           $push: { transactions: { $each: [txn], $slice: -50 } },
         },
-        { session, new: true },
+        { session, returnDocument: 'after' },
       );
 
       // null means either farmer not found OR balance was insufficient
@@ -214,7 +214,7 @@ export const withdrawCash = async (
           $inc:  { cashWalletBalance: -amountNaira },
           $push: { transactions: { $each: [txn], $slice: -50 } },
         },
-        { session, new: true },
+        { session, returnDocument: 'after' },
       );
       if (!updated) throw new AppError('Insufficient cash wallet balance', 400, 'WALLET_INSUFFICIENT_BALANCE');
 

@@ -101,7 +101,12 @@ export const submitLog = async (req: Request, res: Response, next: NextFunction)
     // Resolve or auto-create farmer
     let farmerUser = await User.findOne({ phone: farmerPhone, role: UserRole.FARMER });
     if (!farmerUser) {
-      farmerUser = await User.create({ phone: farmerPhone, fullName: 'Farmer', role: UserRole.FARMER, status: UserStatus.ACTIVE });
+      farmerUser = await User.create({ 
+        phone: farmerPhone, 
+        fullName: 'Farmer', 
+        role: UserRole.FARMER, 
+        status: UserStatus.ACTIVE,
+      });
     }
     let farmer = await Farmer.findOne({ userId: farmerUser._id });
     if (!farmer) {

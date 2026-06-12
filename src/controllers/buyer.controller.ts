@@ -135,7 +135,9 @@ export const getMatches = async (req: Request, res: Response, next: NextFunction
       .sort({ createdAt: -1 })
       .skip((Number(page) - 1) * Number(limit))
       .limit(Number(limit));
+
     ok(res, matches);
+    
   } catch (err) { next(err); }
 };
 

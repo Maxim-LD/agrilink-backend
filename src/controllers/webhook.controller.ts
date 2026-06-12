@@ -57,9 +57,15 @@ export const inboundSMS = async (req: Request, res: Response, next: NextFunction
       }
     }
 
-    // Termii's payload format — we handle both possible shapes for safety
-    const phone: string = req.body.from ?? req.body.phone_number ?? '';
-    const body: string  = (req.body.text ?? req.body.sms ?? '').trim().toUpperCase();
+    // Support Termii (from, phone_number, sms, text) and Vonage (msisdn, text) payloads, checking query params as well
+    const rawPhone = req.body.from ?? req.query.from ?? req.body.phone_number ?? req.query.phone_number ?? req.body.msisdn ?? req.query.msisdn ?? '';
+    let phone = String(rawPhone).trim();
+    if (phone && !phone.startsWith('+')) {
+      phone = '+' + phone;
+    }
+
+    const rawBody = req.body.text ?? req.query.text ?? req.body.sms ?? req.query.sms ?? '';
+    const body = String(rawBody).trim().toUpperCase();
 
     // ── CRITICAL: Return 200 BEFORE running handlers ──────────────────────
     // Termii considers the webhook delivered once it receives 200.

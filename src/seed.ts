@@ -38,7 +38,7 @@ const upsertUser = async (
   return User.findOneAndUpdate(
     { phone },
     { phone, fullName, role, buyerType, status: UserStatus.ACTIVE, passwordHash },
-    { upsert: true, new: true },
+    { upsert: true, returnDocument: 'after' },
   );
 };
 
@@ -62,7 +62,7 @@ const upsertBuyer = async (
       contactName, contactPhone,
       status: UserStatus.ACTIVE,
     },
-    { upsert: true, new: true },
+    { upsert: true, returnDocument: 'after' },
   );
 
 const upsertOrder = async (
@@ -75,7 +75,7 @@ const upsertOrder = async (
   StandingOrder.findOneAndUpdate(
     { buyerId, pipeline, category },
     { buyerId, pipeline, category, minQuantityKg: minQty, pricePerKg: price, isActive: true, isAnchor: true },
-    { upsert: true, new: true },
+    { upsert: true, returnDocument: 'after' },
   );
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -101,7 +101,7 @@ const seed = async () => {
       guarantorPhone:       '+2340000000099',
       disputesCount:        0,
     },
-    { upsert: true, new: true },
+    { upsert: true, returnDocument: 'after' },
   );
   console.log('✅ Aggregator     +2340000000002  / agg123');
 
@@ -110,7 +110,7 @@ const seed = async () => {
   await Dealer.findOneAndUpdate(
     { userId: dealerUser._id },
     { userId: dealerUser._id, shopName: 'Kunle Agro Supplies', dealerCode: 'DEALER007', zone: 'Ibadan North', status: UserStatus.ACTIVE },
-    { upsert: true, new: true },
+    { upsert: true, returnDocument: 'after' },
   );
   console.log('✅ Dealer         +2340000000010  / dealer123  (code: DEALER007)');
 
