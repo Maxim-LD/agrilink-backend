@@ -1,43 +1,5 @@
 import https from 'https';
 
-const sendTermiiSMS = async (to: string, message: string): Promise<void> => {
-  const body = JSON.stringify({
-    to,
-    from:    process.env.TERMII_SENDER_ID ?? 'AGRILINK',
-    sms:     message,
-    type:    'plain',
-    channel: 'generic',
-    api_key: process.env.TERMII_API_KEY,
-  });
-
-  return new Promise((resolve) => {
-    const options = {
-      hostname: 'api.ng.termii.com',
-      path:     '/api/sms/send',
-      method:   'POST',
-      headers:  {
-        'Content-Type':   'application/json',
-        'Content-Length': Buffer.byteLength(body),
-      },
-    };
-
-    const req = https.request(options, (res) => {
-      res.on('data', () => {}); // drain
-      res.on('end', () => {
-        console.log(`[Termii SMS] Sent to ${to} — HTTP ${res.statusCode}`);
-        resolve();
-      });
-    });
-
-    req.on('error', (err) => {
-      console.error('[Termii SMS] Delivery failed to', to, err.message);
-      resolve(); // non-fatal
-    });
-
-    req.write(body);
-    req.end();
-  });
-};
 
 const sendVonageSMS = async (to: string, message: string): Promise<void> => {
   // Vonage expects E.164 format without the leading '+' for recipient numbers
@@ -154,7 +116,7 @@ const sendAfricasTalkingSMS = async (to: string, message: string): Promise<void>
 };
 
 /**
- * Send an SMS via Vonage, Africa's Talking, or Termii depending on what environment keys are set.
+ * Send an SMS via Africa's Talking or Vonage depending on what environment keys are set.
  * Non-fatal — logs errors but never throws, so SMS failures don't crash the app.
  */
 export const sendSMS = async (to: string, message: string): Promise<void> => {
@@ -164,5 +126,5 @@ export const sendSMS = async (to: string, message: string): Promise<void> => {
   if (process.env.VONAGE_API_KEY && process.env.VONAGE_API_SECRET) {
     return sendVonageSMS(to, message);
   }
-  return sendTermiiSMS(to, message);
+  console.warn('[SMS] No SMS provider configured. Unable to send to:', to);
 };

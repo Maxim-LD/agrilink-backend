@@ -164,7 +164,7 @@ export const matchLog = async (logId: string): Promise<void> => {
  *   4. Sending an SMS to the aggregator ("Match found!")
  *
  * NOTE: Buyer is NOT notified via SMS here — they see it on their dashboard.
- * SMS to buyer is a future enhancement (or can be added if Termii allows
+ * SMS to buyer is a future enhancement (or can be added if the SMS gateway allows
  * business-initiated SMS to non-opted-in numbers in production).
  */
 const createMatch = async (

@@ -13,7 +13,8 @@ import { SMS } from '../constants';
 /**
  * INBOUND SMS WEBHOOK
  * ─────────────────────────────────────────────────────────────────────────────
- * Termii calls this URL whenever a farmer sends an SMS to our virtual number.
+ * Africa's Talking (or Vonage) calls this URL whenever a farmer sends an SMS
+ * to our virtual number/shortcode.
  *
  * WHY THIS MATTERS:
  *   Farmers in rural areas have no smartphone or internet. Their ONLY way to
@@ -30,34 +31,13 @@ import { SMS } from '../constants';
  *   "REDEEM 4200 DEALER007"   → "AgriLink OTP: 834291. Valid 10 mins..."
  *   "WITHDRAW 2000"           → "AgriLink: ₦2,000 withdrawal recorded..."
  *
- * SECURITY NOTE — Termii does NOT send a webhook secret header.
- *   Unlike Stripe or GitHub, Termii simply POSTs to your URL with no HMAC
- *   signature or secret token. There is no field in the Termii dashboard
- *   to configure a secret.
- *
- *   Instead we use an optional IP allowlist:
- *   - If TERMII_WEBHOOK_SECRET is set in .env, we validate it (useful for
- *     local testing via Postman where you set the header manually).
- *   - If it is NOT set, we skip the check and rely on the URL being obscure
- *     (acceptable for a hackathon — use IP allowlisting in production).
- *
- * CRITICAL: Always return 200 immediately — Termii retries on non-200.
- *   Retries would send duplicate OTPs to farmers. Return 200 first, then
- *   run handlers async.
+ * CRITICAL: Always return 200 immediately — SMS gateways retry on non-200.
+ *   Retries would send duplicate SMS replies/OTPs to farmers. Return 200 first,
+ *   then run handlers asynchronously.
  */
 export const inboundSMS = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    // Optional secret check — only enforced if TERMII_WEBHOOK_SECRET is set in .env.
-    // Termii itself does not send this header; it is only used for local Postman testing.
-    const configuredSecret = process.env.TERMII_WEBHOOK_SECRET;
-    if (configuredSecret) {
-      const incomingSecret = req.headers['x-termii-webhook-secret'];
-      if (incomingSecret !== configuredSecret) {
-        return next(new AppError('Unauthorized', 401, 'UNAUTHORIZED'));
-      }
-    }
-
-    // Support Termii (from, phone_number, sms, text) and Vonage (msisdn, text) payloads, checking query params as well
+    // Support Africa's Talking (from, text) and Vonage (msisdn, text) payloads, checking query params as well
     const rawPhone = req.body.from ?? req.query.from ?? req.body.phone_number ?? req.query.phone_number ?? req.body.msisdn ?? req.query.msisdn ?? '';
     let phone = String(rawPhone).trim();
     if (phone && !phone.startsWith('+')) {
@@ -68,8 +48,8 @@ export const inboundSMS = async (req: Request, res: Response, next: NextFunction
     const body = String(rawBody).trim().toUpperCase();
 
     // ── CRITICAL: Return 200 BEFORE running handlers ──────────────────────
-    // Termii considers the webhook delivered once it receives 200.
-    // Everything after this line is fire-and-forget — Termii doesn't wait.
+    // The gateway considers the webhook delivered once it receives 200.
+    // Everything after this line is fire-and-forget — they don't wait.
     res.status(200).json({ status: 'received' });
 
     // Split message into command + arguments
