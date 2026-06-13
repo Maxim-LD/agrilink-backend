@@ -63,31 +63,81 @@ export const splitPayout = async (match: IMatch): Promise<void> => {
   const agriCredit = Math.floor(remaining * AGRI_WALLET_SPLIT); // 70%, floored
   const cashCredit = remaining - agriCredit;                     // 30% = exact remainder
 
-  const session = await mongoose.startSession();
-  try {
-    await session.withTransaction(async () => {
-      // Build both transaction records before the DB write
-      const agriTxn = makeTxn(TransactionType.WASTE_PAYOUT, WalletType.AGRI, 'credit', agriCredit, String(match._id));
-      const cashTxn = makeTxn(TransactionType.WASTE_PAYOUT, WalletType.CASH, 'credit', cashCredit, String(match._id));
+  // Build both transaction records before the DB write
+  const agriTxn = makeTxn(TransactionType.WASTE_PAYOUT, WalletType.AGRI, 'credit', agriCredit, String(match._id));
+  const cashTxn = makeTxn(TransactionType.WASTE_PAYOUT, WalletType.CASH, 'credit', cashCredit, String(match._id));
 
-      const updated = await Farmer.findByIdAndUpdate(
-        match.farmerId,
-        {
-          // $inc atomically adds to both balances in one operation
-          $inc:  { agriWalletBalance: agriCredit, cashWalletBalance: cashCredit },
-          // $slice: -50 keeps only the most recent 50 transactions (circular buffer)
-          $push: { transactions: { $each: [agriTxn, cashTxn], $slice: -50 } },
-        },
-        { session, returnDocument: 'after' },
-      );
+  const updated = await Farmer.findByIdAndUpdate(
+    match.farmerId,
+    {
+      // $inc atomically adds to both balances in one operation
+      $inc:  { agriWalletBalance: agriCredit, cashWalletBalance: cashCredit },
+      // $slice: -50 keeps only the most recent 50 transactions (circular buffer)
+      $push: { transactions: { $each: [agriTxn, cashTxn], $slice: -50 } },
+    },
+    { returnDocument: 'after' },
+  );
 
-      // This should never happen — but if it does, the transaction rolls back
-      if (!updated) throw new AppError('Farmer not found during payout', 500, 'PAYOUT_ERROR');
-    });
-  } finally {
-    // Always end the session, even if an error was thrown
-    await session.endSession();
-  }
+  // This should never happen
+  if (!updated) throw new AppError('Farmer not found during payout', 500, 'PAYOUT_ERROR');
+};
+
+// ─── Waste pipeline: Stage 1 advance (10%) ───────────────────────────────────
+
+/**
+ * releaseStage1 — fires when a factory confirms a waste match.
+ *
+ * Pays 10% of farmerNetPayout immediately, split 70/30 across agri/cash wallets.
+ * The remaining 90% (Stage 2) is held until the factory scans the QR goods-in ticket.
+ *
+ * Same atomic $inc + $push pattern as splitPayout — no partial-state credits possible.
+ */
+export const releaseStage1 = async (match: IMatch): Promise<void> => {
+  const stage1Total = match.stage1Amount ?? 0;
+  const agriCredit  = Math.floor(stage1Total * AGRI_WALLET_SPLIT); // 70%, floored
+  const cashCredit  = stage1Total - agriCredit;                     // 30% = exact remainder
+
+  const agriTxn = makeTxn(TransactionType.STAGE1_ADVANCE, WalletType.AGRI, 'credit', agriCredit, String(match._id));
+  const cashTxn = makeTxn(TransactionType.STAGE1_ADVANCE, WalletType.CASH, 'credit', cashCredit, String(match._id));
+
+  const updated = await Farmer.findByIdAndUpdate(
+    match.farmerId,
+    {
+      $inc:  { agriWalletBalance: agriCredit, cashWalletBalance: cashCredit },
+      $push: { transactions: { $each: [agriTxn, cashTxn], $slice: -50 } },
+    },
+    { returnDocument: 'after' },
+  );
+
+  if (!updated) throw new AppError('Farmer not found during Stage 1 payout', 500, 'PAYOUT_ERROR');
+};
+
+// ─── Waste pipeline: Stage 2 final payout (90%) ──────────────────────────────
+
+/**
+ * releaseStage2 — fires when a factory scans the QR goods-in ticket.
+ *
+ * Pays the remaining 90% of farmerNetPayout, split 70/30 across agri/cash wallets.
+ * Only called after weight discrepancy check passes (diff ≤ 15%).
+ */
+export const releaseStage2 = async (match: IMatch): Promise<void> => {
+  const stage2Total = match.stage2Amount ?? 0;
+  const agriCredit  = Math.floor(stage2Total * AGRI_WALLET_SPLIT); // 70%, floored
+  const cashCredit  = stage2Total - agriCredit;                     // 30% = exact remainder
+
+  const agriTxn = makeTxn(TransactionType.STAGE2_PAYOUT, WalletType.AGRI, 'credit', agriCredit, String(match._id));
+  const cashTxn = makeTxn(TransactionType.STAGE2_PAYOUT, WalletType.CASH, 'credit', cashCredit, String(match._id));
+
+  const updated = await Farmer.findByIdAndUpdate(
+    match.farmerId,
+    {
+      $inc:  { agriWalletBalance: agriCredit, cashWalletBalance: cashCredit },
+      $push: { transactions: { $each: [agriTxn, cashTxn], $slice: -50 } },
+    },
+    { returnDocument: 'after' },
+  );
+
+  if (!updated) throw new AppError('Farmer not found during Stage 2 payout', 500, 'PAYOUT_ERROR');
 };
 
 // ─── Fresh produce pipeline: 100% cash ───────────────────────────────────────
@@ -99,30 +149,24 @@ export const splitPayout = async (match: IMatch): Promise<void> => {
  * No Agri-Wallet split for fresh produce (Agri-Wallet is a waste pipeline concept).
  */
 export const creditCash = async (match: IMatch): Promise<void> => {
-  const session = await mongoose.startSession();
-  try {
-    await session.withTransaction(async () => {
-      const txn = makeTxn(
-        TransactionType.PRODUCE_PAYOUT,
-        WalletType.CASH,
-        'credit',
-        match.farmerNetPayout,
-        String(match._id),
-      );
+  const txn = makeTxn(
+    TransactionType.PRODUCE_PAYOUT,
+    WalletType.CASH,
+    'credit',
+    match.farmerNetPayout,
+    String(match._id),
+  );
 
-      const updated = await Farmer.findByIdAndUpdate(
-        match.farmerId,
-        {
-          $inc:  { cashWalletBalance: match.farmerNetPayout },
-          $push: { transactions: { $each: [txn], $slice: -50 } },
-        },
-        { session, returnDocument: 'after' },
-      );
-      if (!updated) throw new AppError('Farmer not found during payout', 500, 'PAYOUT_ERROR');
-    });
-  } finally {
-    await session.endSession();
-  }
+  const updated = await Farmer.findByIdAndUpdate(
+    match.farmerId,
+    {
+      $inc:  { cashWalletBalance: match.farmerNetPayout },
+      $push: { transactions: { $each: [txn], $slice: -50 } },
+    },
+    { returnDocument: 'after' },
+  );
+  
+  if (!updated) throw new AppError('Farmer not found during payout', 500, 'PAYOUT_ERROR');
 };
 
 // ─── Agri-wallet redemption at agro-dealer ────────────────────────────────────
@@ -160,30 +204,23 @@ export const redeemAgriWallet = async (
   otpId:       Types.ObjectId,
   amountNaira: number, // kobo in production
 ): Promise<void> => {
-  const session = await mongoose.startSession();
-  try {
-    await session.withTransaction(async () => {
-      const txn = makeTxn(TransactionType.WALLET_REDEMPTION, WalletType.AGRI, 'debit', amountNaira);
+  const txn = makeTxn(TransactionType.WALLET_REDEMPTION, WalletType.AGRI, 'debit', amountNaira);
 
-      // The $gte in the filter IS the overdraft guard — this is intentional
-      const updated = await Farmer.findOneAndUpdate(
-        { _id: farmerId, agriWalletBalance: { $gte: amountNaira } }, // filter acts as guard
-        {
-          $inc:  { agriWalletBalance: -amountNaira },
-          $push: { transactions: { $each: [txn], $slice: -50 } },
-        },
-        { session, returnDocument: 'after' },
-      );
+  // The $gte in the filter IS the overdraft guard — this is intentional
+  const updated = await Farmer.findOneAndUpdate(
+    { _id: farmerId, agriWalletBalance: { $gte: amountNaira } }, // filter acts as guard
+    {
+      $inc:  { agriWalletBalance: -amountNaira },
+      $push: { transactions: { $each: [txn], $slice: -50 } },
+    },
+    { returnDocument: 'after' },
+  );
 
-      // null means either farmer not found OR balance was insufficient
-      if (!updated) throw new AppError('Insufficient agri-wallet balance', 400, 'WALLET_INSUFFICIENT_BALANCE');
+  // null means either farmer not found OR balance was insufficient
+  if (!updated) throw new AppError('Insufficient agri-wallet balance', 400, 'WALLET_INSUFFICIENT_BALANCE');
 
-      // Mark OTP as used — same session, same atomic operation
-      await OTP.findByIdAndUpdate(otpId, { usedAt: new Date() }, { session });
-    });
-  } finally {
-    await session.endSession();
-  }
+  // Mark OTP as used
+  await OTP.findByIdAndUpdate(otpId, { usedAt: new Date() });
 };
 
 // ─── Cash withdrawal (mocked for hackathon) ───────────────────────────────────
@@ -203,24 +240,18 @@ export const withdrawCash = async (
   farmerId:    Types.ObjectId,
   amountNaira: number, // kobo in production
 ): Promise<void> => {
-  const session = await mongoose.startSession();
-  try {
-    await session.withTransaction(async () => {
-      const txn = makeTxn(TransactionType.CASH_WITHDRAWAL, WalletType.CASH, 'debit', amountNaira);
+  const txn = makeTxn(TransactionType.CASH_WITHDRAWAL, WalletType.CASH, 'debit', amountNaira);
 
-      const updated = await Farmer.findOneAndUpdate(
-        { _id: farmerId, cashWalletBalance: { $gte: amountNaira } }, // overdraft guard
-        {
-          $inc:  { cashWalletBalance: -amountNaira },
-          $push: { transactions: { $each: [txn], $slice: -50 } },
-        },
-        { session, returnDocument: 'after' },
-      );
-      if (!updated) throw new AppError('Insufficient cash wallet balance', 400, 'WALLET_INSUFFICIENT_BALANCE');
+  const updated = await Farmer.findOneAndUpdate(
+    { _id: farmerId, cashWalletBalance: { $gte: amountNaira } }, // overdraft guard
+    {
+      $inc:  { cashWalletBalance: -amountNaira },
+      $push: { transactions: { $each: [txn], $slice: -50 } },
+    },
+    { returnDocument: 'after' },
+  );
+  
+  if (!updated) throw new AppError('Insufficient cash wallet balance', 400, 'WALLET_INSUFFICIENT_BALANCE');
 
-      // Production: await opayDisbursementApi({ reference: txn.reference, amount: amountNaira })
-    });
-  } finally {
-    await session.endSession();
-  }
+  // Production: await opayDisbursementApi({ reference: txn.reference, amount: amountNaira })
 };

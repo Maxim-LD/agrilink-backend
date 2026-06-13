@@ -1,5 +1,5 @@
 import { Schema, model, Document, Types } from 'mongoose';
-import { Pipeline, LogStatus } from '../types';
+import { Pipeline, LogStatus, SpoilageUrgencyTier } from '../types';
 
 /**
  * WHAT IS A LOG?
@@ -142,6 +142,32 @@ export interface ILog extends Document {
    */
   matchId?: Types.ObjectId;
 
+  /**
+   * FRESH PRODUCE ONLY — computed from spoilageDeadline at log creation.
+   * Updated by the spoilageExpiry cron when a log ages into a lower tier.
+   *
+   *   GREEN : 48+ hours remaining — standard matching, no price change
+   *   AMBER : 12–48 hours remaining — 10% urgency price discount, higher match priority
+   *   RED   : under 12 hours — 20% discount, community fallback queued
+   *
+   * Undefined for agri-waste logs.
+   */
+  urgencyTier?: SpoilageUrgencyTier;
+
+  /**
+   * AGRI_WASTE ONLY — generated at log creation time.
+   * Alphanumeric reference for the QR Collection Ticket (e.g. 'AGRI-AB12CD').
+   * Used as verbal fallback when the QR code cannot be scanned.
+   */
+  collectionRef?: string;
+
+  /**
+   * AGRI_WASTE ONLY — JSON string payload encoded into the QR Collection Ticket.
+   * Contains: logId, collectionRef, category, weightKg, condition, zone, farmerMasked.
+   * The frontend encodes this into an actual QR image; we just store the data.
+   */
+  qrPayload?: string;
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -166,6 +192,13 @@ const logSchema = new Schema<ILog>(
     status:  { type: String, enum: Object.values(LogStatus), default: LogStatus.PENDING_MATCH },
     // Null until a Match document is created by the matching engine
     matchId: { type: Schema.Types.ObjectId, ref: 'Match' },
+
+    // Fresh produce only — computed from spoilageDeadline at log creation
+    urgencyTier: { type: String, enum: Object.values(SpoilageUrgencyTier) },
+
+    // Waste pipeline only — QR Collection Ticket fields (generated at log creation)
+    collectionRef: { type: String },
+    qrPayload:     { type: String },
   },
   { timestamps: true },
 );

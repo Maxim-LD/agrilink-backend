@@ -1,5 +1,5 @@
 import { Schema, model, Document, Types } from 'mongoose';
-import { Pipeline, MatchStatus } from '../types';
+import { Pipeline, MatchStatus, LogisticsMode } from '../types';
 
 /**
  * WHAT IS A MATCH?
@@ -114,7 +114,46 @@ export interface IMatch extends Document {
   isDisputed: boolean;
   disputeReason?: string;
 
-  /** Timestamp of when the buyer clicked "Confirm". Also the payment timestamp. */
+  /**
+   * Factory decline reason — one of: 'capacity_full' | 'quality_concern' | 'timing'.
+   * Also used by restaurants (they provide a free-text reason).
+   */
+  declineReason?: string;
+
+  /**
+   * WASTE PIPELINE ONLY — Stage 1 advance (10% of farmerNetPayout).
+   * Pre-computed at match creation. Paid when factory confirms.
+   */
+  stage1Amount?: number;
+
+  /**
+   * WASTE PIPELINE ONLY — Stage 2 final payout (90% of farmerNetPayout).
+   * Pre-computed at match creation (= farmerNetPayout - stage1Amount).
+   * Paid when factory scans QR at goods-in gate.
+   */
+  stage2Amount?: number;
+
+  /** Timestamp when Stage 1 advance was released (factory confirmed match). */
+  stage1PaidAt?: Date;
+
+  /** Timestamp when Stage 2 payout was released (QR goods-in scan). */
+  stage2PaidAt?: Date;
+
+  /**
+   * FRESH PRODUCE ONLY — logistics mode chosen by restaurant buyer at confirm.
+   *   PLATFORM : AgriLink books courier, transport cost split 50/50
+   *   SELF     : Restaurant self-arranges, no platform transport fee
+   */
+  logisticsMode?: LogisticsMode;
+
+  /**
+   * Actual weight entered by factory operative at goods-in gate (kg).
+   * Used to cross-verify against log.weightKg.
+   * If discrepancy > 15%, match goes DISPUTED.
+   */
+  receivedWeightKg?: number;
+
+  /** Timestamp of when the buyer clicked "Confirm". Also the Stage 1 payment timestamp. */
   buyerConfirmedAt?: Date;
   completedAt?: Date;
   createdAt: Date;
@@ -143,14 +182,30 @@ const matchSchema = new Schema<IMatch>(
     agriWalletCredit:  { type: Number },                  // Naira, waste only
     cashWalletCredit:  { type: Number },                  // Naira, waste only
 
-    // PENDING until buyer acts — moves to CONFIRMED or DECLINED
+    // PENDING until buyer acts; moves through STAGE1_RELEASED → COLLECTED (waste)
+    // or PENDING → CONFIRMED (fresh produce)
     status:     { type: String, enum: Object.values(MatchStatus), default: MatchStatus.PENDING },
 
-    // Simplified dispute tracking — no separate Dispute collection for hackathon
+    // Simplified dispute tracking
     isDisputed:    { type: Boolean, default: false },
     disputeReason: { type: String },
 
-    // Set together when buyer confirms. Both timestamps for audit trail.
+    // Decline reason — set by buyer when declining a match
+    declineReason: { type: String },
+
+    // Staged payout fields (waste pipeline only)
+    stage1Amount:  { type: Number }, // 10% of farmerNetPayout
+    stage2Amount:  { type: Number }, // 90% of farmerNetPayout
+    stage1PaidAt:  { type: Date },   // when factory confirmed
+    stage2PaidAt:  { type: Date },   // when QR scanned at goods-in
+
+    // Restaurant logistics mode (fresh produce only)
+    logisticsMode:    { type: String, enum: Object.values(LogisticsMode) },
+
+    // Weight entered at factory goods-in gate (for discrepancy check)
+    receivedWeightKg: { type: Number },
+
+    // Set together when buyer confirms (waste: Stage 1 confirm time, produce: full confirm)
     buyerConfirmedAt: { type: Date },
     completedAt:      { type: Date },
   },

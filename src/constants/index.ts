@@ -2,10 +2,22 @@ import { TransactionType, WalletType } from '../types';
 
 // ─── Fee Rates (all overridable via env) ─────────────────────────────────────
 
-export const PLATFORM_FEE_RATE     = Number(process.env.PLATFORM_FEE_RATE)  || 0.05;
-export const AGRI_WALLET_SPLIT     = Number(process.env.AGRI_WALLET_SPLIT)  || 0.70;
-export const MATCH_SCORE_THRESHOLD = Number(process.env.MATCH_THRESHOLD)    || 40;
-export const TRANSPORT_RATE_PER_KM = 50; // ₦50/km — hardcoded for hackathon
+export const PLATFORM_FEE_RATE            = Number(process.env.PLATFORM_FEE_RATE)  || 0.05;
+export const AGRI_WALLET_SPLIT            = Number(process.env.AGRI_WALLET_SPLIT)  || 0.70;
+export const MATCH_SCORE_THRESHOLD        = Number(process.env.MATCH_THRESHOLD)    || 40;
+export const TRANSPORT_RATE_PER_KM        = 50;   // ₦50/km — hardcoded for hackathon
+
+// Staged payout rates (waste pipeline only)
+export const STAGE1_ADVANCE_RATE          = 0.10; // 10% released when factory confirms
+// STAGE2 = 1 - STAGE1_ADVANCE_RATE (90%) released on QR goods-in scan
+
+// Spoilage urgency discount rates applied to agreedPricePerKg at match creation
+export const AMBER_URGENCY_DISCOUNT       = 0.10; // Amber tier: 10% off price per kg
+export const RED_URGENCY_DISCOUNT         = 0.20; // Red tier:   20% off price per kg
+export const URGENCY_RED_SCORE_BONUS      = 15;   // Red logs get +15 match score boost
+
+// Weight discrepancy threshold for QR goods-in scan
+export const WEIGHT_DISCREPANCY_THRESHOLD = 0.15; // >15% diff → match flagged DISPUTED
 
 // ─── Shelf life for fresh produce spoilage clock ─────────────────────────────
 
@@ -24,11 +36,30 @@ export const SMS = {
   matchFound: (company: string) =>
     `AgriLink: Match found! Buyer: ${company}. Check your dashboard.`,
 
+  // ── Waste pipeline: staged payout ───────────────────────────────────────────
+
+  /** Sent to farmer when factory confirms match — Stage 1 (10%) released */
+  stage1Released: (company: string, agri: number, cash: number) =>
+    `AgriLink: ${company} confirmed waste pickup. Stage 1 advance paid — ₦${agri} → Agri-Wallet, ₦${cash} → Cash Wallet. Awaiting collection.`,
+
+  /** Sent to farmer when factory scans QR at goods-in gate — Stage 2 (90%) released */
+  stage2Released: (company: string, agri: number, cash: number) =>
+    `AgriLink: Waste collected by ${company}. Stage 2 payout complete — ₦${agri} → Agri-Wallet, ₦${cash} → Cash Wallet.`,
+
+  /** Legacy — kept for backward compat */
   matchConfirmedWaste: (company: string, agri: number, cash: number) =>
     `AgriLink: ${company} confirmed your waste pickup. ₦${agri} → Agri-Wallet. ₦${cash} → Cash Wallet.`,
 
+  // ── Fresh produce pipeline ───────────────────────────────────────────────────
+
   matchConfirmedProduce: (company: string, net: number) =>
     `AgriLink: Produce sold to ${company}. ₦${net} added to your Cash Wallet.`,
+
+  /** Sent to farmer when fresh produce log enters Amber or Red spoilage tier */
+  urgencyTierAlert: (category: string, tier: string, hoursLeft: number) =>
+    `AgriLink URGENT: Your ${category} log is now ${tier.toUpperCase()} tier — ${Math.round(hoursLeft)}hrs to spoilage. Discounted price active. Match being prioritised.`,
+
+  // ── OTP & wallet ────────────────────────────────────────────────────────────
 
   otpCode: (code: string) =>
     `AgriLink OTP: ${code}. Valid 10 mins. Share ONLY with your verified agro-dealer.`,

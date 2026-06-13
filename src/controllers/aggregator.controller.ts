@@ -8,7 +8,8 @@ import { Log } from '../models/Log';
 import { AppError } from '../utils/AppError';
 import { ok } from '../utils/response';
 import { matchLog } from '../services/matchingEngine.service';
-import { UserRole, UserStatus, Pipeline, LogStatus } from '../types';
+import { computeUrgencyTier } from '../services/matchingEngine.service';
+import { UserRole, UserStatus, Pipeline, LogStatus, SpoilageUrgencyTier } from '../types';
 import { SHELF_LIFE_HOURS } from '../constants';
 
 const BCRYPT_ROUNDS = 10;
@@ -120,6 +121,36 @@ export const submitLog = async (req: Request, res: Response, next: NextFunction)
       ? new Date(harvestedDate.getTime() + shelfHours * 3_600_000)
       : undefined;
 
+    // Compute urgency tier for fresh produce logs at creation time
+    const urgencyTier = pipeline === Pipeline.FRESH_PRODUCE && spoilageDeadline
+      ? computeUrgencyTier(spoilageDeadline)
+      : undefined;
+
+    // Generate QR Collection Ticket for waste logs immediately at creation
+    // (before matching, so the aggregator can show it to the farmer right away)
+    let collectionRef: string | undefined;
+    let qrPayload: string | undefined;
+    if (pipeline === Pipeline.AGRI_WASTE) {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      collectionRef = 'AGRI-';
+      for (let i = 0; i < 6; i++) collectionRef += chars.charAt(Math.floor(Math.random() * chars.length));
+
+      const maskedPhone = farmerPhone.length > 8
+        ? farmerPhone.slice(0, 4) + '****' + farmerPhone.slice(-4)
+        : '****';
+
+      qrPayload = JSON.stringify({
+        ref:          collectionRef,
+        category:     category.toLowerCase(),
+        weightKg,
+        condition,
+        zone:         aggregator.zone,
+        farmerMasked: maskedPhone,
+        timestamp:    harvestedDate.toISOString(),
+        // logId is added after log creation below
+      });
+    }
+
     const log = await Log.create({
       pipeline,
       aggregatorId: aggregator._id,
@@ -133,7 +164,31 @@ export const submitLog = async (req: Request, res: Response, next: NextFunction)
       spoilageDeadline,
       isExpired:    false,
       status:       LogStatus.PENDING_MATCH,
+      urgencyTier,
+      collectionRef,
+      // Patch qrPayload with the real logId now that the log is created
+      qrPayload: qrPayload
+        ? qrPayload.replace('}', `, "logId": "__LOGID__"}`)
+        : undefined,
     });
+
+    // Patch the logId into the qrPayload now that we have the log._id
+    if (pipeline === Pipeline.AGRI_WASTE && qrPayload) {
+      const fullQrPayload = JSON.stringify({
+        ref:          collectionRef,
+        logId:        String(log._id),
+        category:     (category as string).toLowerCase(),
+        weightKg,
+        condition,
+        zone:         aggregator.zone,
+        farmerMasked: farmerPhone.length > 8
+          ? farmerPhone.slice(0, 4) + '****' + farmerPhone.slice(-4)
+          : '****',
+        timestamp:    harvestedDate.toISOString(),
+      });
+      await Log.findByIdAndUpdate(log._id, { qrPayload: fullQrPayload });
+      log.qrPayload = fullQrPayload;
+    }
 
     // Fire-and-forget — do not await, response returns immediately
     matchLog(String(log._id)).catch((err) => console.error('[MatchLog]', err));

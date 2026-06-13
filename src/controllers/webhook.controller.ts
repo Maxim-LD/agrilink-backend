@@ -9,11 +9,13 @@ import { withdrawCash } from '../services/wallet.service';
 import { sendSMS } from '../services/sms.service';
 import { UserRole, UserStatus } from '../types';
 import { SMS } from '../constants';
+import { MockSMS } from '../models/MockSMS';
+import { getSimulatorHTML } from '../utils/simulator_template';
 
 /**
  * INBOUND SMS WEBHOOK
  * ─────────────────────────────────────────────────────────────────────────────
- * Africa's Talking (or Vonage) calls this URL whenever a farmer sends an SMS
+ * Telnyx (or Vonage) calls this URL whenever a farmer sends an SMS
  * to our virtual number/shortcode.
  *
  * WHY THIS MATTERS:
@@ -37,15 +39,26 @@ import { SMS } from '../constants';
  */
 export const inboundSMS = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    // Support Africa's Talking (from, text) and Vonage (msisdn, text) payloads, checking query params as well
-    const rawPhone = req.body.from ?? req.query.from ?? req.body.phone_number ?? req.query.phone_number ?? req.body.msisdn ?? req.query.msisdn ?? '';
+    // Support Telnyx (data.payload.from.phone_number, data.payload.text) and Vonage (msisdn, text) payloads, checking query params as well
+    const rawPhone = req.body.data?.payload?.from?.phone_number ?? req.body.msisdn ?? req.query.msisdn ?? req.body.from ?? req.query.from ?? '';
     let phone = String(rawPhone).trim();
     if (phone && !phone.startsWith('+')) {
       phone = '+' + phone;
     }
 
-    const rawBody = req.body.text ?? req.query.text ?? req.body.sms ?? req.query.sms ?? '';
+    const rawBody = req.body.data?.payload?.text ?? req.body.text ?? req.query.text ?? '';
     const body = String(rawBody).trim().toUpperCase();
+
+    // Always log to MockSMS for simulator
+    if (phone && rawBody) {
+      await MockSMS.create({
+        phone,
+        message: rawBody,
+        direction: 'inbound',
+      }).catch((err) => {
+        console.error('[MockSMS Log Inbound Error]', err);
+      });
+    }
 
     // ── CRITICAL: Return 200 BEFORE running handlers ──────────────────────
     // The gateway considers the webhook delivered once it receives 200.
@@ -221,5 +234,88 @@ const handleWithdraw = async (phone: string, amountStr: string): Promise<void> =
     } else {
       console.error('[SMS:WITHDRAW]', err);
     }
+  }
+};
+
+
+// ─── Simulator Actions ───────────────────────────────────────────────────────
+
+/**
+ * getSimulatorUI - renders the HTML dashboard for the simulator.
+ */
+export const getSimulatorUI = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const html = getSimulatorHTML();
+    res.setHeader('Content-Type', 'text/html');
+    
+    // Override strict CSP headers (e.g., from Helmet) to allow inline scripts and styles for the simulator
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self';"
+    );
+
+    res.status(200).send(html);
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * getSimulatorFarmers - returns a list of registered farmers with their phone numbers and balances.
+ */
+export const getSimulatorFarmers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const allUsers = await User.find();
+   
+    // Retrieve users with role FARMER, regardless of status for simulator access
+    const farmerUsers = await User.find({ role: UserRole.FARMER });
+    console.log(`[Simulator Debug] Found ${farmerUsers.length} users with role FARMER`);
+
+    const result = [];
+
+    for (const user of farmerUsers) {
+      let farmer = await Farmer.findOne({ userId: user._id });
+      if (!farmer) {
+        console.log(`[Simulator Debug] User ${user.phone} (${user.fullName}) has no Farmer profile. Creating one...`);
+        farmer = await Farmer.create({
+          userId: user._id,
+          zone: 'Ibadan North',
+          agriWalletBalance: 0,
+          cashWalletBalance: 0
+        });
+      }
+
+      result.push({
+        fullName:    user.fullName,
+        phone:       user.phone,
+        agriWallet:  farmer.agriWalletBalance,
+        cashWallet:  farmer.cashWalletBalance,
+      });
+    }
+
+    console.log(`[Simulator Debug] Returning ${result.length} farmers to simulator`);
+    res.status(200).json(result);
+  } catch (err) {
+    console.error('[Simulator Debug Error]', err);
+    next(err);
+  }
+};
+
+/**
+ * getMockSMSHistory - retrieves the conversation logs for a given phone number.
+ */
+export const getMockSMSHistory = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { phone } = req.params;
+    if (!phone) {
+      res.status(400).json({ error: 'Phone number parameter is required' });
+      return;
+    }
+
+    // Sort by timestamp: 1 to get chronological conversation history
+    const logs = await MockSMS.find({ phone }).sort({ timestamp: 1 });
+    res.status(200).json(logs);
+  } catch (err) {
+    next(err);
   }
 };

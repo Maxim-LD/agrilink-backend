@@ -1,9 +1,19 @@
 import { Router } from 'express';
-import { inboundSMS } from '../controllers/webhook.controller';
+import {
+  inboundSMS,
+  getSimulatorUI,
+  getSimulatorFarmers,
+  getMockSMSHistory,
+} from '../controllers/webhook.controller';
 
 const router = Router();
 
-// Africa's Talking calls this when a farmer sends an SMS
+// Telnyx (or Vonage) calls this when a farmer sends an SMS
 router.post('/sms/inbound', inboundSMS);
+
+// SMS Simulator routes
+router.get('/sms/simulator', getSimulatorUI);
+router.get('/sms/simulator/farmers', getSimulatorFarmers);
+router.get('/sms/mock-history/:phone', getMockSMSHistory);
 
 export default router;

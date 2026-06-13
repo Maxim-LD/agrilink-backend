@@ -493,7 +493,7 @@
     },
 
     {
-      "name": "Webhooks (Termii Inbound SMS)",
+      "name": "Webhooks (Inbound SMS)",
       "item": [
         {
           "name": "Inbound SMS — BAL command",
@@ -501,14 +501,13 @@
             "method": "POST",
             "url": { "raw": "{{base_url}}/webhooks/sms/inbound", "host": ["{{base_url}}"], "path": ["webhooks", "sms", "inbound"] },
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "x-termii-webhook-secret", "value": "your_termii_webhook_secret_here" }
+              { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"from\": \"+2348022222222\",\n  \"text\": \"BAL\"\n}"
             },
-            "description": "Simulates Termii calling your webhook when a farmer texts 'BAL'. Replace the secret header value with your TERMII_WEBHOOK_SECRET from .env. The farmer receives their wallet balance via SMS."
+            "description": "Simulates an inbound SMS webhook call when a farmer texts 'BAL'. The farmer receives their wallet balance via SMS."
           }
         },
         {
@@ -517,8 +516,7 @@
             "method": "POST",
             "url": { "raw": "{{base_url}}/webhooks/sms/inbound", "host": ["{{base_url}}"], "path": ["webhooks", "sms", "inbound"] },
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "x-termii-webhook-secret", "value": "your_termii_webhook_secret_here" }
+              { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {
               "mode": "raw",
@@ -533,8 +531,7 @@
             "method": "POST",
             "url": { "raw": "{{base_url}}/webhooks/sms/inbound", "host": ["{{base_url}}"], "path": ["webhooks", "sms", "inbound"] },
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "x-termii-webhook-secret", "value": "your_termii_webhook_secret_here" }
+              { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {
               "mode": "raw",
@@ -549,8 +546,7 @@
             "method": "POST",
             "url": { "raw": "{{base_url}}/webhooks/sms/inbound", "host": ["{{base_url}}"], "path": ["webhooks", "sms", "inbound"] },
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "x-termii-webhook-secret", "value": "your_termii_webhook_secret_here" }
+              { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {
               "mode": "raw",

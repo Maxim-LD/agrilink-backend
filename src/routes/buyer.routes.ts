@@ -5,7 +5,7 @@ import { UserRole } from '../types';
 import {
   registerBuyer, registerBuyerSchema,
   getProfile, createOrder, standingOrderSchema, getOrders,
-  getMatches, getMatch, confirmMatch, declineMatch,
+  getMatches, getMatch, confirmMatch, declineMatch, scanGoodsIn,
 } from '../controllers/buyer.controller';
 
 const router = Router();
@@ -32,5 +32,6 @@ router.get('/matches', getMatches);
 router.get('/matches/:id', getMatch);
 router.post('/matches/:id/confirm', confirmMatch);
 router.post('/matches/:id/decline', declineMatch);
+router.post('/matches/:id/goods-in', scanGoodsIn); // Factory QR goods-in scan → Stage 2 payout
 
 export default router;

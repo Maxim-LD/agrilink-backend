@@ -5,7 +5,7 @@ import { Match } from '../models/Match';
 import { Buyer } from '../models/Buyer';
 import { Aggregator } from '../models/Aggregator';
 import { User } from '../models/User';
-import { LogStatus, MatchStatus, Pipeline } from '../types';
+import { LogStatus, MatchStatus, Pipeline, SpoilageUrgencyTier } from '../types';
 import { haversineKm } from '../utils/haversine';
 import { sendSMS } from './sms.service';
 import {
@@ -14,7 +14,51 @@ import {
   MATCH_SCORE_THRESHOLD,
   TRANSPORT_RATE_PER_KM,
   AGRI_WALLET_SPLIT,
+  STAGE1_ADVANCE_RATE,
+  AMBER_URGENCY_DISCOUNT,
+  RED_URGENCY_DISCOUNT,
+  URGENCY_RED_SCORE_BONUS,
 } from '../constants';
+
+// ─── Urgency Tier Utilities ───────────────────────────────────────────────────
+
+/**
+ * Computes the spoilage urgency tier for a fresh produce log.
+ * Called at log creation time (to store on Log) and at match time (to apply pricing).
+ *
+ *   GREEN : 48+ hours remaining — standard price
+ *   AMBER : 12–48 hours remaining — 10% price discount
+ *   RED   : under 12 hours — 20% price discount + score bonus
+ */
+export const computeUrgencyTier = (spoilageDeadline: Date): SpoilageUrgencyTier => {
+  const hoursRemaining = (spoilageDeadline.getTime() - Date.now()) / 3_600_000;
+  if (hoursRemaining >= 48) return SpoilageUrgencyTier.GREEN;
+  if (hoursRemaining >= 12) return SpoilageUrgencyTier.AMBER;
+  return SpoilageUrgencyTier.RED;
+};
+
+/**
+ * Returns a discount multiplier for price based on urgency tier.
+ *   GREEN → 1.0 (no discount)
+ *   AMBER → 0.90 (10% off)
+ *   RED   → 0.80 (20% off)
+ */
+const urgencyPriceMultiplier = (tier: SpoilageUrgencyTier): number => {
+  if (tier === SpoilageUrgencyTier.AMBER) return 1 - AMBER_URGENCY_DISCOUNT;
+  if (tier === SpoilageUrgencyTier.RED)   return 1 - RED_URGENCY_DISCOUNT;
+  return 1.0;
+};
+
+/**
+ * Generates a random alphanumeric collection reference (e.g. 'AGRI-AB12CD').
+ * Stored on waste logs for verbal fallback when QR code cannot be scanned.
+ */
+const generateCollectionRef = (): string => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let ref = 'AGRI-';
+  for (let i = 0; i < 6; i++) ref += chars.charAt(Math.floor(Math.random() * chars.length));
+  return ref;
+};
 
 /**
  * MATCHING ENGINE — HOW IT WORKS
@@ -126,7 +170,17 @@ export const matchLog = async (logId: string): Promise<void> => {
         const quantityScore  = Math.min(log.weightKg / order.minQuantityKg, 1) * 100;
 
         // Weighted composite
-        const composite = proximityScore * 0.4 + demandScore * 0.3 + quantityScore * 0.3;
+        let composite = proximityScore * 0.4 + demandScore * 0.3 + quantityScore * 0.3;
+
+        // Red-tier logs get a score bonus to surface them first — urgency pricing alone
+        // isn't enough: we also need buyers to SEE the match before it expires
+        if (
+          log.pipeline === Pipeline.FRESH_PRODUCE &&
+          log.spoilageDeadline &&
+          computeUrgencyTier(log.spoilageDeadline) === SpoilageUrgencyTier.RED
+        ) {
+          composite += URGENCY_RED_SCORE_BONUS;
+        }
 
         return { order, composite, dist };
       }),
@@ -186,7 +240,15 @@ const createMatch = async (
   const dist     = haversineKm(logLat, logLng, buyerLat, buyerLng);
 
   // ── Pre-compute all money fields (locked in at match time) ─────────────────
-  const totalValue    = order.pricePerKg * log.weightKg;       // Naira, kobo in production
+
+  // Apply urgency price discount for fresh produce (Amber = 10% off, Red = 20% off)
+  let effectivePricePerKg = order.pricePerKg;
+  if (log.pipeline === Pipeline.FRESH_PRODUCE && log.spoilageDeadline) {
+    const tier      = computeUrgencyTier(log.spoilageDeadline);
+    effectivePricePerKg = Math.floor(order.pricePerKg * urgencyPriceMultiplier(tier));
+  }
+
+  const totalValue    = effectivePricePerKg * log.weightKg;       // Naira, kobo in production
   const platformFee   = Math.floor(totalValue * PLATFORM_FEE_RATE); // 5% revenue
 
   // Transport cost only applies to fresh produce (factory arranges own for waste)
@@ -202,6 +264,12 @@ const createMatch = async (
   const cashWalletCredit = log.pipeline === Pipeline.AGRI_WASTE && agriWalletCredit !== undefined
     ? farmerNetPayout - agriWalletCredit : undefined; // remainder, not Math.floor
 
+  // Waste pipeline: pre-compute Stage 1 (10%) and Stage 2 (90%) payout amounts
+  const stage1Amount = log.pipeline === Pipeline.AGRI_WASTE
+    ? Math.floor(farmerNetPayout * STAGE1_ADVANCE_RATE) : undefined;
+  const stage2Amount = log.pipeline === Pipeline.AGRI_WASTE && stage1Amount !== undefined
+    ? farmerNetPayout - stage1Amount : undefined; // = 90%, exact remainder
+
   // Create the Match document with all pre-computed fields
   const match = await Match.create({
     pipeline:         log.pipeline,
@@ -210,15 +278,36 @@ const createMatch = async (
     buyerId:          order.buyerId,
     farmerId:         log.farmerId,
     matchScore:       Math.round(score),
-    agreedPricePerKg: order.pricePerKg,
+    agreedPricePerKg: effectivePricePerKg,
     totalValue,
     platformFee,
     transportCost:    transportCost > 0 ? transportCost : undefined,
     farmerNetPayout,
     agriWalletCredit,
     cashWalletCredit,
+    stage1Amount,
+    stage2Amount,
     status: MatchStatus.PENDING, // buyer must confirm
   });
+
+  // Waste pipeline: generate QR Collection Ticket fields and store them on the Log
+  if (log.pipeline === Pipeline.AGRI_WASTE) {
+    // Only generate if not already set (idempotent — matching engine may retry)
+    if (!log.collectionRef) {
+      const collectionRef = generateCollectionRef();
+      const qrPayload = JSON.stringify({
+        logId:        String(log._id),
+        matchId:      String(match._id),
+        ref:          collectionRef,
+        category:     log.category,
+        weightKg:     log.weightKg,
+        condition:    log.condition,
+        coordinates:  log.location.coordinates, // [lng, lat]
+        timestamp:    new Date().toISOString(),
+      });
+      await Log.findByIdAndUpdate(log._id, { collectionRef, qrPayload });
+    }
+  }
 
   // Update Log: link to this Match and advance to MATCHED status
   await Log.findByIdAndUpdate(log._id, {

@@ -30,6 +30,31 @@ export enum Pipeline {
   AGRI_WASTE    = 'agri_waste',    // factory by-products; no spoilage deadline
 }
 
+/**
+ * Three-tier spoilage urgency for fresh produce logs.
+ * Calculated from hoursRemaining = (spoilageDeadline - now) / 3,600,000
+ *   GREEN : 48+ hours  — standard matching, no price change
+ *   AMBER : 12–48 hrs  — urgency pricing activates (10% discount)
+ *   RED   : < 12 hrs   — maximum discount (20%), community fallback queued
+ */
+export enum SpoilageUrgencyTier {
+  GREEN = 'green',
+  AMBER = 'amber',
+  RED   = 'red',
+}
+
+/**
+ * Logistics mode chosen by the restaurant buyer at match confirmation.
+ *   PLATFORM : AgriLink books courier — transport cost split 50/50 between
+ *              restaurant and farmer. Farmer's payout is reduced by 50% of cost.
+ *   SELF     : Restaurant self-arranges pickup — no platform transport fee,
+ *              farmer receives full net payout (totalValue − platformFee).
+ */
+export enum LogisticsMode {
+  PLATFORM = 'platform',
+  SELF     = 'self',
+}
+
 export enum LogStatus {
   // Freshly submitted — matching engine hasn't run yet, or ran and is retrying
   PENDING_MATCH = 'pending_match',
@@ -52,17 +77,25 @@ export enum LogStatus {
 }
 
 export enum MatchStatus {
-  PENDING   = 'pending',   // match created — awaiting buyer decision on dashboard
-  CONFIRMED = 'confirmed', // buyer confirmed — wallet payout fired
-  DECLINED  = 'declined',  // buyer declined — log re-queued for re-matching
-  DISPUTED  = 'disputed',  // admin flagged a problem (replaces full Dispute model)
+  PENDING         = 'pending',          // match created — awaiting buyer decision
+  STAGE1_RELEASED = 'stage1_released',  // waste only: 10% advance paid, awaiting QR goods-in scan
+  CONFIRMED       = 'confirmed',        // restaurant: 100% payout fired immediately
+  COLLECTED       = 'collected',        // waste only: QR scanned, Stage 2 (90%) payout fired
+  DECLINED        = 'declined',         // buyer declined — log re-queued for re-matching
+  DISPUTED        = 'disputed',         // weight discrepancy or admin flag — funds on hold
 }
 
 export enum TransactionType {
-  // Farmer receives payment when factory confirms a waste match (two wallet entries)
+  // Waste pipeline — Stage 1: 10% advance paid when factory confirms match
+  STAGE1_ADVANCE    = 'stage1_advance',
+
+  // Waste pipeline — Stage 2: remaining 90% paid when factory scans QR goods-in
+  STAGE2_PAYOUT     = 'stage2_payout',
+
+  // Legacy: kept for backward-compat with existing waste_payout records
   WASTE_PAYOUT      = 'waste_payout',
 
-  // Farmer receives payment when restaurant confirms a fresh produce match
+  // Farmer receives payment when restaurant confirms a fresh produce match (100% instant)
   PRODUCE_PAYOUT    = 'produce_payout',
 
   // Farmer spends Agri-Wallet balance at an agro-dealer shop (OTP redemption)
