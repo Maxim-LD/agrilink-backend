@@ -17,12 +17,12 @@ import { logger } from './utils/logger';
 
 const app = express();
 
-app.set('trust proxy', 1)
-
+// app.set('trust proxy', 1)
+``
 
 // ─── Security ─────────────────────────────────────────────────────────────────
 app.use(helmet());
-app.use(cors({ origin: process.env.ALLOWED_ORIGIN ?? '*' }));
+app.use(cors({ origin: '*' }));
 
 // Request logging middleware
 app.use(requestLogger);
