@@ -18,7 +18,7 @@ const BCRYPT_ROUNDS = 10;
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
 export const registerDealerSchema = Joi.object({
-  phone:      Joi.string().pattern(/^\+[1-9]\d{1,14}$/).required(),
+  phone:      Joi.string().pattern(/^(?:\+234|234|0)[0789][01]\d{8}$/).required(),
   fullName:   Joi.string().min(2).required(),
   password:   Joi.string().min(6).required(),
   shopName:   Joi.string().required(),
@@ -28,7 +28,7 @@ export const registerDealerSchema = Joi.object({
 
 export const redeemSchema = Joi.object({
   code:        Joi.string().length(6).pattern(/^\d+$/).required(),
-  farmerPhone: Joi.string().pattern(/^\+[1-9]\d{1,14}$/).required(),
+  farmerPhone: Joi.string().pattern(/^(?:\+234|234|0)[0789][01]\d{8}$/).required(),
 });
 
 // ─── Register ─────────────────────────────────────────────────────────────────

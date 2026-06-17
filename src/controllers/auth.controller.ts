@@ -13,7 +13,7 @@ import { UserStatus } from '../types';
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
 export const loginSchema = Joi.object({
-  phone:    Joi.string().required(),
+  phone:    Joi.string().pattern(/^(?:\+234|234|0)[0789][01]\d{8}$/).required(),
   password: Joi.string().required(),
 });
 
