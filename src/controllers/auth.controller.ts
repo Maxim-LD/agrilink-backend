@@ -39,11 +39,7 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
     ok(res, 
       { 
         token, 
-        user: { 
-          id: user._id, 
-          role: user.role,
-          fullName: user.fullName
-        } 
+        user
       });
   } catch (err) {
     next(err);

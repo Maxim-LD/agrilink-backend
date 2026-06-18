@@ -17,18 +17,19 @@ const BCRYPT_ROUNDS = 10;
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
 export const registerAggregatorSchema = Joi.object({
-  phone:                Joi.string().pattern(/^\+[1-9]\d{1,14}$/).required(),
+  phone:    Joi.string().pattern(/^(?:\+234|234|0)[0789][01]\d{8}$/).required(),
   fullName:             Joi.string().min(2).required(),
   password:             Joi.string().min(6).required(),
   zone:                 Joi.string().required(),
   governmentIdType:     Joi.string().valid('nin', 'drivers_licence', 'intl_passport').required(),
   governmentIdNumber:   Joi.string().required(),
   governmentIdPhotoUrl: Joi.string().uri().required(),
-  guarantorPhone:       Joi.string().pattern(/^\+[1-9]\d{1,14}$/).required(),
+  guarantorPhone:       Joi.string().pattern(/^(?:\+234|234|0)[0789][01]\d{8}$/).required()
 });
 
 export const logSubmissionSchema = Joi.object({
-  farmerPhone:  Joi.string().pattern(/^\+[1-9]\d{1,14}$/).required(),
+  farmerPhone:  Joi.string().pattern(/^(?:\+234|234|0)[0789][01]\d{8}$/).required(),
+
   pipeline:     Joi.string().valid(...Object.values(Pipeline)).required(),
   category:     Joi.string().required(),
   weightKg:     Joi.number().min(0.1).required(),
